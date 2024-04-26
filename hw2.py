@@ -130,6 +130,7 @@ class DecisionNode:
         self.entropy = calc_entropy(data)
         self.feature_importance = 0
         self.n_total = data.shape[0]
+        self.remaining_features = []
 
 
     def calc_node_pred(self):
@@ -240,21 +241,23 @@ class DecisionNode:
 
         best_feature, values = self.find_best_feature()
         self.feature = best_feature
+        self.remaining_features.remove(best_feature)
         self.calc_feature_importance(self.n_total)
 
-        if len(values) < 2:
+        if len(values) < 2 or len(self.remaining_features) == 0:
             self.terminal = True
             return
 
         n_total_samples = self.data.shape[0]
 
         for value in values:
-            child = DecisionNode(data=np.delete(values[value], best_feature, axis=1),
+            child = DecisionNode(data=values[value],
                                  impurity_func=self.impurity_func,
                                  depth=self.depth + 1,
                                  max_depth=self.max_depth,
                                  gain_ratio=self.gain_ratio)
             child.n_total = n_total_samples
+            child.remaining_features = self.remaining_features.copy()
             self.add_child(child, value)
 
         for child in self.children:
@@ -266,7 +269,7 @@ class DecisionNode:
 
 
     def find_best_feature(self):
-        features_goodness = {f: self.goodness_of_split(f) for f in range(self.data.shape[1] - 1)}
+        features_goodness = {f: self.goodness_of_split(f) for f in self.remaining_features}
         best_feature = max(features_goodness, key=lambda key: features_goodness[key][0])
 
         return best_feature, features_goodness[best_feature][1]
@@ -321,6 +324,7 @@ class DecisionTree:
                             depth=0,
                             max_depth=self.max_depth,
                             impurity_func=self.impurity_func)
+        self.root.remaining_features = [i for i in range(self.data.shape[1] - 1)]
         self.root.split()
 
         ###########################################################################
@@ -346,12 +350,13 @@ class DecisionTree:
 
         while not node.terminal:
             feature = node.feature
+            print(f"reached feature {node.feature} | value is {instance[feature]}")
             node = node.children[node.children_values == instance[feature]]
-            instance = np.delete(instance, feature, axis=0)
 
         ###########################################################################
         #                             END OF YOUR CODE                            #
         ###########################################################################
+    
         return node.pred
 
     def calc_accuracy(self, dataset):
